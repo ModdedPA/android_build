@@ -16,6 +16,24 @@
 
 # Configuration for Linux on ARM.
 # Included by combo/select.mk
+#
+# Copyright (C) 2006 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Configuration for Linux on ARM.
+# Included by combo/select.mk
 
 # You can set TARGET_ARCH_VARIANT to use an arch version other
 # than ARMv5TE. Each value should correspond to a file named
@@ -34,11 +52,21 @@ ifeq ($(strip $(TARGET_ARCH_VARIANT)),)
 TARGET_ARCH_VARIANT := armv5te
 endif
 
-ifeq ($(strip $(TARGET_GCC_VERSION_EXP)),)
-TARGET_GCC_VERSION := 4.7
+ifeq ($(strip $(TARGET_GCC_VERSION_AND)),)
+TARGET_GCC_VERSION_AND := 4.7
 else
-TARGET_GCC_VERSION := $(TARGET_GCC_VERSION_EXP)
+TARGET_GCC_VERSION_AND := $(TARGET_GCC_VERSION_AND)
 endif
+
+ifeq ($(strip $(TARGET_GCC_VERSION_ARM)),)
+TARGET_GCC_VERSION_ARM := 4.7
+else
+TARGET_GCC_VERSION_ARM := $(TARGET_GCC_VERSION_ARM)
+endif
+
+# Specify Target Custom GCC Chains to use:
+TARGET_GCC_VERSION_AND := 4.7
+TARGET_GCC_VERSION_ARM := 4.7
 
 TARGET_ARCH_SPECIFIC_MAKEFILE := $(BUILD_COMBOS)/arch/$(TARGET_ARCH)/$(TARGET_ARCH_VARIANT).mk
 ifeq ($(strip $(wildcard $(TARGET_ARCH_SPECIFIC_MAKEFILE))),)
@@ -49,7 +77,7 @@ include $(TARGET_ARCH_SPECIFIC_MAKEFILE)
 
 # You can set TARGET_TOOLS_PREFIX to get gcc from somewhere else
 ifeq ($(strip $(TARGET_TOOLS_PREFIX)),)
-TARGET_TOOLCHAIN_ROOT := prebuilts/gcc/$(HOST_PREBUILT_TAG)/arm/arm-linux-androideabi-$(TARGET_GCC_VERSION)
+TARGET_TOOLCHAIN_ROOT := prebuilts/gcc/$(HOST_PREBUILT_TAG)/arm/arm-linux-androideabi-$(TARGET_GCC_VERSION_AND)
 TARGET_TOOLS_PREFIX := $(TARGET_TOOLCHAIN_ROOT)/bin/arm-linux-androideabi-
 endif
 
@@ -68,43 +96,36 @@ endif
 
 TARGET_NO_UNDEFINED_LDFLAGS := -Wl,--no-undefined
 
-ifeq ($(TARGET_USE_O3),true)
-TARGET_arm_CFLAGS :=    -O3 \
+TARGET_arm_CFLAGS :=    -Os \
+                        -fno-tree-vectorize \
+                        -fno-inline-functions \
+                        -fgcse-after-reload \
+                        -fipa-cp-clone \
+                        -fpredictive-commoning \
+                        -fsched-spec-load \
+                        -fvect-cost-model \
                         -fomit-frame-pointer \
-                        -fstrict-aliasing    \
-                        -fno-tree-vectorize
-else
-TARGET_arm_CFLAGS :=    -O2 \
-                        -fomit-frame-pointer \
-                        -fstrict-aliasing    \
+                        -fstrict-aliasing \
+                        -Wstrict-aliasing=3 \
+                        -Werror=strict-aliasing \
                         -funswitch-loops
-endif
-# Modules can choose to compile some source as thumb. As
-# non-thumb enabled targets are supported, this is treated
-# as a 'hint'. If thumb is not enabled, these files are just
-# compiled as ARM.
-ifeq ($(TARGET_USE_O3),true)
-TARGET_thumb_CFLAGS :=  -mthumb \
-                            -O2 \
-                            -fomit-frame-pointer \
-                            -fno-strict-aliasing \
-                            -fno-tree-vectorize
-else
-TARGET_thumb_CFLAGS :=  -mthumb \
-                            -Os \
-                            -fomit-frame-pointer \
-                            -fno-strict-aliasing
-endif
 
-ifneq ($(filter 4.8 4.8.% 4.9 4.9.%, $(TARGET_GCC_VERSION)),)
-TARGET_arm_CFLAGS +=  -Wno-unused-parameter \
-                      -Wno-unused-value \
-                      -Wno-unused-function
-
-TARGET_thumb_CFLAGS +=  -Wno-unused-parameter \
-                        -Wno-unused-value \
-                        -Wno-unused-function
-endif
+# Modules can choose to compile some source as thumb.
+TARGET_thumb_CFLAGS :=  -mthumb \
+                        -Os \
+                        -fno-tree-vectorize \
+                        -fno-inline-functions \
+                        -fno-unswitch-loops \
+                        -fgcse-after-reload \
+                        -fipa-cp-clone \
+                        -fpredictive-commoning \
+                        -fsched-spec-load \
+                        -funswitch-loops \
+                        -fvect-cost-model \
+                        -fomit-frame-pointer \
+                        -fstrict-aliasing \
+                        -Wstrict-aliasing=3 \
+                        -Werror=strict-aliasing
 
 # Set FORCE_ARM_DEBUGGING to "true" in your buildspec.mk
 # or in your environment to force a full arm build, even for
@@ -148,9 +169,11 @@ TARGET_GLOBAL_CFLAGS += $(TARGET_ANDROID_CONFIG_CFLAGS)
 # We cannot turn it off blindly since the option is not available
 # in gcc-4.4.x.  We also want to disable sincos optimization globally
 # by turning off the builtin sin function.
-ifneq ($(filter 4.6 4.6.% 4.7 4.7.% 4.8 4.8.% 4.9 4.9.%, $(TARGET_GCC_VERSION)),)
+ifneq ($(filter 4.6 4.6.% 4.7 4.7.% 4.8 4.8.% 4.9 4.9.%, $(TARGET_GCC_VERSION_AND)),)
+ifneq ($(filter 4.6 4.6.% 4.7 4.7.% 4.8 4.8.% 4.9 4.9.%, $(TARGET_GCC_VERSION_ARM)),)
 TARGET_GLOBAL_CFLAGS += -Wno-unused-but-set-variable -fno-builtin-sin \
 			-fno-strict-volatile-bitfields
+endif
 endif
 
 # This is to avoid the dreaded warning compiler message:
@@ -180,7 +203,8 @@ TARGET_GLOBAL_CPPFLAGS += -fvisibility-inlines-hidden
 TARGET_RELEASE_CFLAGS := \
 			-DNDEBUG \
 			-g \
-			-Wstrict-aliasing=2 \
+			-Wstrict-aliasing=3 \
+			-Werror=strict-aliasing \
 			-fgcse-after-reload \
 			-frerun-cse-after-loop \
 			-frename-registers
